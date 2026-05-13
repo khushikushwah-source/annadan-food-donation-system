@@ -11,9 +11,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Routes
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/listings', require('./routes/listings'));
+// Routes — pehle check karo files hain ya nahi
+const authRoutes = require('./routes/auth');
+const listingRoutes = require('./routes/listings');
+
+app.use('/api/auth', authRoutes);
+app.use('/api/listings', listingRoutes);
 
 // Test route
 app.get('/', (req, res) => {

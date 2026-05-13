@@ -75,20 +75,22 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Last role save karo
-    user.lastRole = role;
-    await user.save();
+    // Last role save karo — sirf tab jab role aaye
+    if (role && (role === 'donor' || role === 'ngo')) {
+      user.lastRole = role;
+      await user.save();
+    }
 
     // Token bhejo
     res.json({
       message: 'Login ho gaya!',
-      token: generateToken(user._id, role),
+      token: generateToken(user._id, role || 'donor'),
       user: {
         id: user._id,
         naam: user.naam,
         email: user.email,
         city: user.city,
-        role: role,
+        role: role || 'donor',
       },
     });
 
