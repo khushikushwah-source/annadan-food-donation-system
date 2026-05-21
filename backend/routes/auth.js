@@ -6,7 +6,6 @@ const User = require('../models/User');
 const OTP = require('../models/OTP');
 const { generateOTP, sendOTPEmail } = require('../utils/emailService');
 
-// Token banane ka function
 const generateToken = (id, role) => {
   return jwt.sign(
     { id, role },
@@ -15,9 +14,7 @@ const generateToken = (id, role) => {
   );
 };
 
-// ─────────────────────────────────────────
-// SEND OTP — POST /api/auth/send-otp
-// ─────────────────────────────────────────
+// SEND OTP
 router.post('/send-otp', async (req, res) => {
   try {
     const { email, purpose } = req.body;
@@ -28,9 +25,10 @@ router.post('/send-otp', async (req, res) => {
       });
     }
 
-    // Register ke liye — check karo pehle se registered to nahi
     if (purpose === 'register') {
-      const exists = await User.findOne({ email });
+      const exists = await User.findOne({
+        email: email.toLowerCase().trim()
+      });
       if (exists) {
         return res.status(400).json({
           message: 'Ye email pehle se registered hai! Login karo.'
@@ -38,9 +36,10 @@ router.post('/send-otp', async (req, res) => {
       }
     }
 
-    // Reset ke liye — check karo user exist karta hai
     if (purpose === 'reset') {
-      const user = await User.findOne({ email });
+      const user = await User.findOne({
+        email: email.toLowerCase().trim()
+      });
       if (!user) {
         return res.status(400).json({
           message: 'Ye email registered nahi hai!'
@@ -48,21 +47,12 @@ router.post('/send-otp', async (req, res) => {
       }
     }
 
-    // Purana OTP delete karo
     await OTP.deleteMany({ email, purpose });
-
-    // Naya OTP banao
     const otp = generateOTP();
-
-    // OTP database mein save karo
     await OTP.create({ email, otp, purpose });
-
-    // Email bhejo
     await sendOTPEmail(email, otp, purpose);
 
-    res.json({
-      message: `OTP bheja gaya ${email} par!`
-    });
+    res.json({ message: `OTP bheja gaya ${email} par!` });
 
   } catch (error) {
     console.error('Send OTP error:', error);
@@ -70,14 +60,11 @@ router.post('/send-otp', async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────
-// VERIFY OTP — POST /api/auth/verify-otp
-// ─────────────────────────────────────────
+// VERIFY OTP
 router.post('/verify-otp', async (req, res) => {
   try {
     const { email, otp, purpose } = req.body;
 
-    // OTP dhundho
     const otpRecord = await OTP.findOne({ email, purpose });
 
     if (!otpRecord) {
@@ -92,9 +79,7 @@ router.post('/verify-otp', async (req, res) => {
       });
     }
 
-    // OTP sahi hai — delete karo
     await OTP.deleteMany({ email, purpose });
-
     res.json({ message: 'OTP verify ho gaya!' });
 
   } catch (error) {
@@ -102,41 +87,49 @@ router.post('/verify-otp', async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────
-// REGISTER — POST /api/auth/register
-// ─────────────────────────────────────────
+// REGISTER
 router.post('/register', async (req, res) => {
   try {
     const { naam, phone, email, password, city } = req.body;
 
+    console.log('Register attempt:', { email, phone });
+
     // Email check
-    const emailExists = await User.findOne({ email: email.toLowerCase() });
+    const emailExists = await User.findOne({
+      email: email.toLowerCase().trim()
+    });
+    console.log('Email exists:', emailExists ? 'YES' : 'NO');
+
     if (emailExists) {
       return res.status(400).json({
         message: 'Ye email pehle se registered hai! Login karo.'
       });
     }
 
-    // Phone check — string trim karke compare karo
-    const phoneExists = await User.findOne({ phone: phone.toString().trim() });
+    // Phone check
+    const phoneExists = await User.findOne({
+      phone: phone.toString().trim()
+    });
+    console.log('Phone exists:', phoneExists ? 'YES' : 'NO');
+
     if (phoneExists) {
       return res.status(400).json({
         message: 'Ye phone number pehle se registered hai! Login karo.'
       });
     }
 
-    // Password encrypt karo
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // User banao
     const user = await User.create({
       naam,
       phone: phone.toString().trim(),
-      email: email.toLowerCase(),
+      email: email.toLowerCase().trim(),
       password: hashedPassword,
       city,
     });
+
+    console.log('User created:', user._id);
 
     res.status(201).json({
       message: 'Account ban gaya!',
@@ -149,18 +142,33 @@ router.post('/register', async (req, res) => {
     });
 
   } catch (error) {
+    console.error('Register error:', error);
+    // MongoDB duplicate key error
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      if (field === 'email') {
+        return res.status(400).json({
+          message: 'Ye email pehle se registered hai! Login karo.'
+        });
+      }
+      if (field === 'phone') {
+        return res.status(400).json({
+          message: 'Ye phone number pehle se registered hai! Login karo.'
+        });
+      }
+    }
     res.status(500).json({ message: error.message });
   }
 });
 
-// ─────────────────────────────────────────
-// LOGIN — POST /api/auth/login
-// ─────────────────────────────────────────
+// LOGIN
 router.post('/login', async (req, res) => {
   try {
     const { email, password, role } = req.body;
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({
+      email: email.toLowerCase().trim()
+    });
     if (!user) {
       return res.status(400).json({
         message: 'Email ya password galat hai!'
@@ -196,27 +204,81 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────
-// RESET PASSWORD — POST /api/auth/reset-password
-// ─────────────────────────────────────────
+// RESET PASSWORD
 router.post('/reset-password', async (req, res) => {
   try {
     const { email, newPassword } = req.body;
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({
+      email: email.toLowerCase().trim()
+    });
     if (!user) {
-      return res.status(400).json({
-        message: 'User nahi mila!'
-      });
+      return res.status(400).json({ message: 'User nahi mila!' });
     }
 
-    // Naya password encrypt karo
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(newPassword, salt);
     await user.save();
 
     res.json({ message: 'Password reset ho gaya! Ab login karo.' });
 
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// UPDATE PROFILE — PUT /api/auth/update-profile
+router.put('/update-profile', require('../middleware/auth'), async (req, res) => {
+  try {
+    const { naam, city } = req.body;
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User nahi mila!' });
+    }
+
+    user.naam = naam || user.naam;
+    user.city = city || user.city;
+    await user.save();
+
+    res.json({
+      message: 'Profile update ho gayi!',
+      user: {
+        id: user._id,
+        naam: user.naam,
+        email: user.email,
+        city: user.city,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// CHANGE PASSWORD — PUT /api/auth/change-password
+router.put('/change-password', require('../middleware/auth'), async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User nahi mila!' });
+    }
+
+    // Purana password check karo
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({
+        message: 'Purana password galat hai!'
+      });
+    }
+
+    // Naya password save karo
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    await user.save();
+
+    res.json({ message: 'Password change ho gaya!' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

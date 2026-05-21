@@ -3,7 +3,9 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
+const cron = require('node-cron');
 const connectDB = require('./config/db');
+const Listing = require('./models/Listing');
 
 dotenv.config();
 connectDB();
@@ -28,32 +30,58 @@ const listingRoutes = require('./routes/listings');
 app.use('/api/auth', authRoutes);
 app.use('/api/listings', listingRoutes);
 
-// Test route
 app.get('/', (req, res) => {
   res.json({ message: 'Annadan backend chal raha hai!' });
 });
 
-// SOCKET.IO — Real time chat
+// ─────────────────────────────────────────
+// CRON JOB — Har 5 minute mein run hoga
+// ─────────────────────────────────────────
+cron.schedule('*/5 * * * *', async () => {
+  try {
+    const now = new Date();
+
+    // Jo listings expire ho gayi hain unhe find karo
+    const expiredListings = await Listing.updateMany(
+      {
+        status: 'available',
+        safeTime: { $lt: now },
+      },
+      {
+        $set: { status: 'expired' }
+      }
+    );
+
+    if (expiredListings.modifiedCount > 0) {
+      console.log(`${expiredListings.modifiedCount} listings expire ho gayi — ${now.toLocaleTimeString()}`);
+    }
+
+  } catch (error) {
+    console.error('Cron job error:', error);
+  }
+});
+
+console.log('Auto-expire cron job shuru ho gaya — har 5 minute mein check hoga!');
+
+// ─────────────────────────────────────────
+// SOCKET.IO
+// ─────────────────────────────────────────
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
-  // Room mein join karo
   socket.on('join_room', (roomId) => {
     socket.join(roomId);
     console.log(`User ${socket.id} joined room: ${roomId}`);
   });
 
-  // Message receive karo aur bhejo
   socket.on('send_message', (data) => {
     socket.to(data.roomId).emit('receive_message', data);
   });
 
-  // Typing indicator
   socket.on('typing', (data) => {
     socket.to(data.roomId).emit('user_typing', data);
   });
 
-  // Disconnect
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
   });
