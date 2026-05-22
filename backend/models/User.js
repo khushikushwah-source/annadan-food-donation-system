@@ -25,22 +25,28 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  // Role login ke time decide hoga
   lastRole: {
     type: String,
     enum: ['donor', 'ngo'],
     default: 'donor',
   },
-  // NGO details — agar kabhi NGO role liya
+  // NGO details
   ngoDetails: {
-    ngoNaam: String,
-    registrationNo: String,
-    address: String,
-    capacity: Number,
-    verified: {
-      type: Boolean,
-      default: false,
+    ngoNaam: { type: String, default: '' },
+    registrationNo: { type: String, default: '' },
+    address: { type: String, default: '' },
+    capacity: { type: Number, default: 0 },
+    verified: { type: Boolean, default: false },
+    verificationStatus: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'pending',
     },
+    rejectionReason: { type: String, default: '' },
+  },
+  isAdmin: {
+    type: Boolean,
+    default: false,
   },
   createdAt: {
     type: Date,

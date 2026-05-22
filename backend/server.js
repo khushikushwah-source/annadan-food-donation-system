@@ -29,6 +29,7 @@ const listingRoutes = require('./routes/listings');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/listings', listingRoutes);
+app.use('/api/admin', require('./routes/admin'));
 
 app.get('/', (req, res) => {
   res.json({ message: 'Annadan backend chal raha hai!' });
